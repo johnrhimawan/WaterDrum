@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WaterDrum: Watermarking for Data-centric Unlearning Metric</title>
+<meta name="description" content="WaterDrum is the first data-centric unlearning metric for large language models. It applies robust text watermarking so that the evidence of unlearning lives in the data itself — separable, calibrated, and feasible without a retrained reference model, even when forget and retain sets are near-duplicates.">
+<meta property="og:title" content="WaterDrum: Watermarking for Data-centric Unlearning Metric">
+<meta property="og:description" content="A data-centric unlearning metric for LLMs that survives duplicates, paraphrases, and the absence of a retrained reference model.">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="WaterDrum: Watermarking for Data-centric Unlearning Metric">
+<meta name="twitter:description" content="A data-centric unlearning metric for LLMs that survives duplicates, paraphrases, and the absence of a retrained reference model.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ─── TOKENS ─────────────────────────────────────────────── */
+:root {
+  --serif: 'Lora', Georgia, serif;
+  --sans:  'Outfit', -apple-system, sans-serif;
+  --mono:  'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --toc-w: 172px;
+  --col:   740px;
+  /* dark — deep ocean */
+  --bg:    #050d20; --bg1: #081530; --bg2: #0c1b3e; --bg3: #11244e; --bg4: #182f60;
+  --a:     #38bdf8; --a2:  #7dd3fc; --a-dim: rgba(56,189,248,.14);
+  --b:     #22d3ee; --b-dim: rgba(34,211,238,.14);
+  --g:     #2dd4bf; --g-dim: rgba(45,212,191,.12);
+  --w:     #fbbf24; --w-dim: rgba(251,191,36,.13);
+  --border: rgba(255,255,255,.07); --border2: rgba(255,255,255,.14);
+  --t1: #eef6ff; --t2: #b9cee6; --t3: #7c97b6; --t4: #4d6786; --t5: #2f445e;
+}
+[data-theme="light"] {
+  /* light — clear water */
+  --bg: #f3f8fc; --bg1: #eaf2f9; --bg2: #dfebf4; --bg3: #d0e2ef; --bg4: #bcd4e8;
+  --a: #0284c7; --a2: #0369a1; --a-dim: rgba(2,132,199,.12);
+  --b: #0e7490; --b-dim: rgba(14,116,144,.12);
+  --g: #0d9488; --g-dim: rgba(13,148,136,.11);
+  --w: #b45309; --w-dim: rgba(180,83,9,.10);
+  --border: rgba(0,0,0,.08); --border2: rgba(0,0,0,.15);
+  --t1: #0c1a2c; --t2: #1f3a5a; --t3: #3a577a; --t4: #5d7a98; --t5: #97acc1;
+}
+
+/* ─── RESET ─────────────────────────────────────────────── */
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box }
+html { scroll-behavior:smooth; scroll-padding-top:56px }
+body { font-family:var(--sans); background:var(--bg); color:var(--t2); font-size:17px; line-height:1.8; -webkit-font-smoothing:antialiased; font-feature-settings: "kern" 1 }
+a { color:var(--a); text-decoration:none; transition:color .15s }
+a:hover { color:var(--a2) }
+::selection { background:var(--a); color:#fff }
+img,svg.fig { max-width:100%; display:block }
+[id] { scroll-margin-top:56px }
+
+/* ─── HERO ───────────────────────────────────────────────── */
+.hero { position:relative; padding:104px 32px 88px; text-align:center; overflow:hidden }
+.hero-ripples {
+  position:absolute; inset:0; pointer-events:none;
+  background-image:radial-gradient(circle, rgba(56,189,248,.20) 1.5px, transparent 1.6px);
+  background-size:42px 42px;
+  mask-image:radial-gradient(ellipse 78% 88% at 50% 0%, black 22%, transparent 78%);
+  animation:dot-pulse 7s ease-in-out infinite;
+}
+@keyframes dot-pulse { 0%,100%{opacity:.55} 50%{opacity:1} }
+.hero-glow {
+  position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(ellipse 80% 55% at 50% -10%, rgba(56,189,248,.22) 0%, transparent 62%),
+    radial-gradient(ellipse 42% 28% at 14% 92%, rgba(34,211,238,.10) 0%, transparent 55%),
+    radial-gradient(ellipse 36% 25% at 86% 88%, rgba(45,212,191,.08) 0%, transparent 50%);
+}
+.hero-inner { position:relative; max-width:860px; margin:0 auto }
+.hero-venue {
+  display:inline-flex; align-items:center; gap:7px;
+  padding:4px 16px 4px 12px; border-radius:20px;
+  background:var(--a-dim); border:1px solid rgba(56,189,248,.32);
+  font-size:11.5px; font-weight:700; color:var(--a);
+  letter-spacing:.10em; text-transform:uppercase; margin-bottom:28px;
+}
+.venue-dot { width:6px; height:6px; border-radius:50%; background:var(--a); animation:blink 2.4s ease-in-out infinite }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+.hero-title { display:flex; align-items:center; justify-content:center; gap:18px; margin-bottom:24px; flex-wrap:wrap }
+.hero-logo { width:88px; height:88px; flex-shrink:0; filter:drop-shadow(0 8px 22px rgba(56,189,248,.42)); animation:logo-sway 5s ease-in-out infinite }
+@keyframes logo-sway {
+  0%,100% { transform:translateY(0)   rotate(-1deg) }
+  50%     { transform:translateY(-3%) rotate( 1deg) }
+}
+.hero h1 { font-family:var(--serif); font-size:clamp(38px,6vw,64px); font-weight:700; color:var(--t1); letter-spacing:-.03em; line-height:1.08; margin-bottom:0 }
+.hero h1 em { font-style:italic; color:var(--a) }
+
+.hero-tagline { font-size:18px; color:var(--t3); max-width:640px; margin:0 auto 34px; line-height:1.65; font-weight:300 }
+.hero-authors { font-size:14.5px; color:var(--t3); line-height:2.1; margin-bottom:28px }
+.hero-authors .name { color:var(--t2); font-weight:500 }
+.hero-authors sup { font-size:10px; color:var(--t4) }
+.eq { color:var(--b); font-size:10px; font-weight:700 }
+.affils { font-size:12.5px; color:var(--t4); margin-top:4px; line-height:1.9 }
+.hero-btns { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap }
+.btn { display:inline-flex; align-items:center; gap:7px; padding:9px 22px; border-radius:24px; font-family:var(--sans); font-size:13.5px; font-weight:600; border:none; cursor:pointer; transition:all .18s }
+.btn-arxiv { background:#b31b1b; color:#fff }
+.btn-arxiv:hover { background:#8f1313; color:#fff }
+.btn-github { background:#24292e; color:#fff }
+.btn-github:hover { background:#3d444d; color:#fff }
+.btn-hf { background:linear-gradient(135deg,#ff9d00,#ffd21e); color:#1a1a1a }
+.btn-hf:hover { filter:brightness(1.06); color:#1a1a1a }
+.btn-ghost { background:transparent; border:1px solid var(--border2); color:var(--t2) }
+.btn-ghost:hover { background:var(--bg3); color:var(--t1) }
+
+.hero-scroll { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; opacity:0; animation:sfade 1s ease 1.2s forwards }
+@keyframes sfade { to { opacity:.4 } }
+.scroll-line { width:1px; height:40px; background:linear-gradient(180deg,var(--a),transparent); animation:sline 2s ease-in-out infinite }
+@keyframes sline { 0%,100%{transform:scaleY(1);opacity:.6} 50%{transform:scaleY(.6);opacity:.25} }
+.scroll-text { font-size:10px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--t5) }
+
+/* ─── TLDR ───────────────────────────────────────────────── */
+.tldr-wrap { background:linear-gradient(135deg,rgba(56,189,248,.09) 0%,rgba(34,211,238,.07) 100%); border-top:1px solid rgba(56,189,248,.20); border-bottom:1px solid rgba(34,211,238,.14); padding:36px 32px }
+.tldr-inner { max-width:var(--col); margin:0 auto; display:flex; gap:20px; align-items:flex-start }
+.tldr-badge { flex-shrink:0; background:var(--a); color:#04101e; font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; padding:4px 12px; border-radius:4px; margin-top:5px }
+[data-theme="light"] .tldr-badge { color:#fff }
+.tldr-text { font-size:17px; color:var(--t1); line-height:1.75 }
+.tldr-text strong { color:var(--a) }
+@media(max-width:640px){ .tldr-inner { flex-direction:column; gap:12px } }
+
+/* ─── PAGE LAYOUT ────────────────────────────────────────── */
+.page { max-width:calc(var(--col) + var(--toc-w) + 80px); margin:0 auto; padding:0 32px 120px; display:grid; grid-template-columns:var(--toc-w) 1fr; gap:0 56px; align-items:start }
+@media(max-width:980px) { .page { grid-template-columns:1fr } .toc { display:none } }
+@media(max-width:640px) { .page { padding:0 20px 80px } }
+
+/* ─── TOC ────────────────────────────────────────────────── */
+.toc { position:sticky; top:28px; padding:32px 0 0; max-height:calc(100vh - 56px); overflow-y:auto; opacity:0; transform:translateY(8px); transition:opacity .4s ease, transform .4s ease }
+.toc.ready { opacity:1; transform:translateY(0) }
+.toc-label { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--t5); margin-bottom:12px }
+.toc a { display:block; font-size:12.5px; color:var(--t4); padding:4px 0 4px 12px; border-left:2px solid transparent; transition:all .15s; line-height:1.4 }
+.toc a:hover { color:var(--t2) }
+.toc a.active { color:var(--t1); border-left-color:var(--a); font-weight:500 }
+.toc a.sub { padding-left:22px; font-size:12px }
+@media(min-width:981px) { .toc { border-right:1px solid var(--border); padding-right:20px } }
+
+/* ─── ARTICLE ────────────────────────────────────────────── */
+.article { min-width:0; padding:56px 0 0 }
+.article section { margin-bottom:80px }
+.kicker { font-size:10.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--a); margin-bottom:12px }
+.article h2 { font-family:var(--serif); font-size:32px; font-weight:700; color:var(--t1); letter-spacing:-.03em; line-height:1.12; margin-bottom:22px }
+.article h3 { font-family:var(--serif); font-size:21px; font-weight:600; color:var(--t1); letter-spacing:-.02em; margin:44px 0 13px }
+.article p { margin-bottom:20px; line-height:1.85 }
+.article p:last-child { margin-bottom:0 }
+.article strong { color:var(--t1); font-weight:600 }
+.article hr { border:none; height:1px; background:linear-gradient(90deg,transparent,var(--border2),transparent); margin:72px 0 }
+.article em { font-style:italic }
+
+/* ─── FIGURE ─────────────────────────────────────────────── */
+.figure { margin:36px 0 40px; border-radius:16px; overflow:hidden; border:1px solid var(--border2); background:var(--bg1); transition:border-color .25s, transform .25s; box-shadow:0 6px 48px rgba(0,0,0,.09) }
+.figure:hover { border-color:rgba(56,189,248,.30); transform:translateY(-2px) }
+.figure-caption { padding:14px 22px 18px; font-size:13px; color:var(--t4); line-height:1.6; border-top:1px solid var(--border) }
+.figure-caption strong { color:var(--t3) }
+
+/* ─── PROPERTY TABLE ─────────────────────────────────────── */
+.ptable { width:100%; border-collapse:collapse; font-size:13.5px; margin:28px 0 }
+.ptable th { padding:10px 14px; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--t4); background:var(--bg2); border-bottom:1px solid var(--border); text-align:center }
+.ptable th:first-child { text-align:left }
+.ptable td { padding:11px 14px; color:var(--t2); border-bottom:1px solid var(--border); text-align:center }
+.ptable td:first-child { text-align:left; font-weight:500; color:var(--t1) }
+.ptable tr:last-child td { border-bottom:none }
+.ptable tr:hover td { background:var(--bg2) }
+.ck { color:var(--g); font-size:15px } .cx { color:var(--t5); font-size:15px }
+.mr td { background:var(--a-dim) }
+.mr td:first-child { font-weight:700; color:var(--a) }
+.mr:hover td { background:rgba(56,189,248,.18) }
+
+/* ─── STAGE FLOW ─────────────────────────────────────────── */
+.stage-flow { display:flex; flex-direction:column; margin:28px 0 }
+.stage { display:flex; gap:16px; padding:20px 18px; background:var(--bg2); border:1px solid var(--border); transition:background .18s; position:relative }
+.stage:first-child { border-radius:14px 14px 0 0 }
+.stage:last-child  { border-radius:0 0 14px 14px }
+.stage:not(:last-child) { border-bottom:none }
+.stage:hover { background:var(--bg3) }
+.stage:not(:first-child)::before { content:''; position:absolute; left:33px; top:0; height:20px; width:2px; background:var(--border2); border-radius:1px }
+.snum { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; flex-shrink:0; font-family:var(--serif) }
+.s1 { background:var(--a-dim); color:var(--a); border:1px solid rgba(56,189,248,.32) }
+.s2 { background:var(--b-dim); color:var(--b); border:1px solid rgba(34,211,238,.32) }
+.s3 { background:var(--g-dim); color:var(--g); border:1px solid rgba(45,212,191,.32) }
+.s4 { background:var(--w-dim); color:var(--w); border:1px solid rgba(251,191,36,.32) }
+.stage:has(.s1) { border-left:3px solid rgba(56,189,248,.45) }
+.stage:has(.s2) { border-left:3px solid rgba(34,211,238,.45) }
+.stage:has(.s3) { border-left:3px solid rgba(45,212,191,.45) }
+.stage:has(.s4) { border-left:3px solid rgba(251,191,36,.45) }
+.stitle { font-family:var(--serif); font-size:15.5px; font-weight:700; color:var(--t1); margin-bottom:5px; letter-spacing:-.01em }
+.sdesc  { font-size:13.5px; color:var(--t3); line-height:1.65; margin:0 }
+
+/* ─── CALLOUT ────────────────────────────────────────────── */
+.callout { background:var(--a-dim); border-left:3px solid var(--a); border-radius:0 12px 12px 0; padding:24px 28px; margin:32px 0; font-family:var(--serif); font-size:18px; font-style:italic; color:var(--t1); line-height:1.65 }
+.callout strong { font-style:normal; color:var(--a) }
+.callout-v { background:var(--b-dim); border-left-color:var(--b) }
+.callout-v strong { color:var(--b) }
+
+/* ─── STATS ──────────────────────────────────────────────── */
+.stats { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:32px 0 }
+@media(max-width:540px) { .stats { grid-template-columns:1fr 1fr } }
+.stat { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:24px 18px; text-align:center; transition:border-color .2s, transform .22s }
+.stat:hover { border-color:var(--border2); transform:translateY(-3px) }
+.stat-num { font-family:var(--serif); font-size:46px; font-weight:700; line-height:1; margin-bottom:9px }
+.ca { color:var(--a) } .cb { color:var(--b) } .cg { color:var(--g) }
+.stat-desc { font-size:13px; color:var(--t3); line-height:1.5 }
+
+/* ─── DATASET CARDS ──────────────────────────────────────── */
+.dscards { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:28px 0 }
+@media(max-width:600px) { .dscards { grid-template-columns:1fr } }
+.dscard { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:22px 22px 18px; transition:border-color .2s, transform .2s }
+.dscard:hover { transform:translateY(-2px); border-color:var(--border2) }
+.ds-tag { display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; padding:3px 10px; border-radius:5px; margin-bottom:12px }
+.ds-tag.a { background:var(--a-dim); color:var(--a); border:1px solid rgba(56,189,248,.3) }
+.ds-tag.b { background:var(--b-dim); color:var(--b); border:1px solid rgba(34,211,238,.3) }
+.ds-title { font-family:var(--serif); font-size:18px; font-weight:700; color:var(--t1); margin-bottom:6px }
+.ds-meta { font-family:var(--mono); font-size:11.5px; color:var(--t4); margin-bottom:12px }
+.ds-desc { font-size:13.5px; color:var(--t3); line-height:1.65; margin-bottom:14px }
+.ds-link { font-size:12.5px; font-weight:600; display:inline-flex; align-items:center; gap:6px }
+
+/* ─── RESULTS TABLE ──────────────────────────────────────── */
+.rtable { width:100%; border-collapse:collapse; font-size:13px; margin:0 }
+.rtable th { padding:9px 11px; font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--t4); background:var(--bg2); border-bottom:1px solid var(--border); text-align:left }
+.rtable td { padding:10px 11px; color:var(--t2); border-bottom:1px solid var(--border) }
+.ctr { text-align:center }
+.rtable tr:last-child td { border-bottom:none }
+.rtable .mr td { background:var(--a-dim) }
+.rtable .mr td:first-child { font-weight:700; color:var(--a) }
+.rtable tr:hover td { background:var(--bg2) }
+.rtable .mr:hover td { background:rgba(56,189,248,.18) }
+.best { color:var(--a); font-weight:700 }
+.weak { color:#ef4444; font-weight:600 }
+.fn { font-size:12px; color:var(--t5); margin-top:8px; margin-bottom:28px }
+.table-wrap { overflow:auto; border-radius:14px; border:1px solid var(--border); margin:24px 0 }
+
+/* ─── NOISE / DUPLICATE CARDS ────────────────────────────── */
+.noise-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin:24px 0 }
+@media(max-width:600px) { .noise-grid { grid-template-columns:1fr } }
+.noise-card { border-radius:12px; padding:16px 14px; border:1px solid var(--border); transition:border-color .18s, transform .18s }
+.noise-card:hover { transform:translateY(-2px); border-color:var(--border2) }
+.nc-title { font-size:12px; font-weight:700; color:var(--t3); margin-bottom:10px; text-transform:uppercase; letter-spacing:.07em }
+.nc-row { display:flex; align-items:center; justify-content:space-between; font-size:13px; margin-bottom:6px }
+.nc-name { color:var(--t3) }
+.dbad  { color:#ef4444; font-weight:700; font-family:var(--mono); font-size:12px }
+.dgood { color:var(--a);  font-weight:700; font-family:var(--mono); font-size:12px }
+
+/* ─── TAKEAWAY ───────────────────────────────────────────── */
+.takeaway { position:relative; background:linear-gradient(135deg,var(--bg3) 0%,var(--bg2) 100%); border:1px solid var(--border2); border-radius:20px; padding:40px; margin:36px 0; overflow:hidden; text-align:center }
+.takeaway::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 70% 70% at 50% 50%,rgba(56,189,248,.06) 0%,transparent 70%); pointer-events:none }
+.takeaway-icon { font-size:42px; margin-bottom:14px; line-height:1 }
+.takeaway-text { font-family:var(--serif); font-size:22px; font-weight:600; font-style:italic; color:var(--t1); line-height:1.55; position:relative; z-index:1 }
+.takeaway-text strong { color:var(--a); font-style:normal }
+
+/* ─── LIMITATION CARDS ───────────────────────────────────── */
+.lim-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:24px 0 }
+@media(max-width:540px) { .lim-grid { grid-template-columns:1fr } }
+.lim-card { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:18px 16px }
+.lim-title { font-size:14px; font-weight:700; color:var(--t1); margin-bottom:8px; display:flex; align-items:center; gap:7px }
+.lim-dot { width:8px; height:8px; border-radius:50%; background:rgba(251,191,36,.75); flex-shrink:0 }
+.lim-dot-b { background:rgba(34,211,238,.8) }
+.lim-dot-c { background:rgba(239,68,68,.8) }
+.lim-dot-d { background:rgba(56,189,248,.85) }
+.lim-card p { font-size:13.5px; color:var(--t3); margin:0; line-height:1.65 }
+
+/* ─── CODE BLOCK ─────────────────────────────────────────── */
+.codeblock { background:#04091a; border:1px solid var(--border2); border-radius:14px; overflow:hidden; margin:24px 0 }
+[data-theme="light"] .codeblock { background:#0c1a2c }
+.cb-head { display:flex; align-items:center; justify-content:space-between; padding:10px 18px; background:rgba(255,255,255,.025); border-bottom:1px solid var(--border) }
+.cb-lang { font-family:var(--mono); font-size:11px; color:var(--a); letter-spacing:.06em; font-weight:500 }
+.cb-copy { background:none; border:none; font-family:var(--sans); font-size:11px; color:#7c97b6; cursor:pointer; padding:3px 10px; border-radius:5px; transition:all .15s }
+.cb-copy:hover { background:rgba(255,255,255,.06); color:#eef6ff }
+.codeblock pre { padding:20px 22px; overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.8; color:#9bb6d2 }
+.bt-type  { color:#e879f9 } .bt-key { color:var(--a) } .bt-field { color:var(--b) }
+.bt-val   { color:#86efac } .bt-brace { color:#7c97b6 }
+
+/* ─── FOOTER ─────────────────────────────────────────────── */
+footer { background:var(--bg1); border-top:1px solid var(--border); padding:56px 32px; text-align:center }
+.footer-logo { display:flex; align-items:center; justify-content:center; gap:12px; font-family:var(--serif); font-size:22px; font-weight:700; color:var(--t1); margin-bottom:10px }
+.footer-logo em { color:var(--a); font-style:normal }
+.footer-sub { font-size:14px; color:var(--t4); line-height:1.7; margin-bottom:24px }
+.footer-links { display:flex; gap:14px; justify-content:center; flex-wrap:wrap }
+.footer-links a:not(.btn) { font-size:13px; color:var(--t4) }
+.footer-links a:not(.btn):hover { color:var(--a) }
+.footer-credit { margin-top:24px; font-size:12px; color:var(--t5); line-height:1.6 }
+
+/* ─── UTILS ──────────────────────────────────────────────── */
+.reveal { opacity:0; transform:translateY(20px); transition:opacity .7s ease, transform .7s ease }
+.reveal.on { opacity:1; transform:translateY(0) }
+.hi { color:var(--a); font-weight:600 }
+.hi-b { color:var(--b); font-weight:600 }
+.hi-g { color:var(--g); font-weight:600 }
+.tag { display:inline-block; font-family:var(--mono); font-size:12.5px; background:var(--bg3); color:var(--b); padding:1px 8px; border-radius:5px; border:1px solid var(--border) }
+
+/* ─── FIXED ──────────────────────────────────────────────── */
+#rp { position:fixed; top:0; left:0; z-index:300; height:2px; width:0%; pointer-events:none; background:linear-gradient(90deg,var(--a) 0%,var(--b) 60%,var(--g) 100%); transition:width .08s linear }
+#tt { position:fixed; bottom:28px; right:28px; z-index:999; width:44px; height:44px; border-radius:50%; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .2s, transform .15s, box-shadow .2s;
+  background:#1e293b; border:2px solid #0f172a; color:#fbbf24;
+  box-shadow:0 4px 20px rgba(0,0,0,.35), 0 1px 4px rgba(0,0,0,.2);
+}
+[data-theme="dark"] #tt {
+  background:#f8fafc; border:2px solid #e2e8f0; color:#d97706;
+  box-shadow:0 4px 20px rgba(255,255,255,.12), 0 1px 4px rgba(0,0,0,.3);
+}
+#tt:hover { transform:scale(1.1) }
+[data-theme="light"] #tt:hover { background:#334155 }
+[data-theme="dark"]  #tt:hover { background:#e2e8f0 }
+.ico-sun  { display:none }
+.ico-moon { display:block }
+[data-theme="dark"] .ico-sun  { display:block }
+[data-theme="dark"] .ico-moon { display:none }
+
+/* ─── LOGO SVG ───────────────────────────────────────────── */
+.droplet-fill   { fill:url(#dropletGrad) }
+.droplet-stroke { stroke:rgba(56,189,248,.65); stroke-width:1.2; fill:none }
+.droplet-shine  { fill:rgba(255,255,255,.65) }
+.drum-body      { fill:url(#drumBodyGrad); stroke:rgba(255,255,255,.10); stroke-width:.8 }
+.drum-head      { fill:url(#drumHeadGrad); stroke:rgba(2,132,199,.55); stroke-width:1 }
+.drum-rim       { fill:none; stroke:rgba(2,132,199,.55); stroke-width:1 }
+.drum-shadow    { fill:rgba(0,0,0,.18) }
+.drum-ripple    { fill:none; stroke:rgba(255,255,255,.55); stroke-linecap:round }
+[data-theme="light"] .drum-ripple { stroke:rgba(2,132,199,.45) }
+.drum-lug       { fill:rgba(2,132,199,.55) }
+[data-theme="dark"] .drum-lug { fill:rgba(125,211,252,.65) }
+/* Independent droplet bob inside the logo */
+.logo-drop { transform-origin:32px 18px; animation:drop-bob 2.6s ease-in-out infinite }
+@keyframes drop-bob {
+  0%,100% { transform:translateY(0)     scale(1) }
+  45%     { transform:translateY(-8%)   scale(1.04) }
+  60%     { transform:translateY(0)     scale(.98) }
+}
+.logo-ripple { transform-origin:32px 36px; animation:ripple-grow 2.6s ease-out infinite; opacity:0 }
+@keyframes ripple-grow {
+  0%   { transform:scale(.45); opacity:0 }
+  55%  { transform:scale(.55); opacity:.0 }
+  70%  { transform:scale(.9);  opacity:.85 }
+  100% { transform:scale(1.6); opacity:0 }
+}
+</style>
+</head>
+<body>
+
+<div id="rp"></div>
+<button id="tt" onclick="toggleTheme()" title="Toggle theme">
+  <svg class="ico-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  <svg class="ico-sun"  width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+</button>
+
+<!-- Inline gradients shared by hero + footer waterdrum logos -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="drumHeadGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#bae6fd"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="drumBodyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#0c4a6e"/>
+      <stop offset="55%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#075985"/>
+    </linearGradient>
+    <linearGradient id="dropletGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#7dd3fc"/>
+      <stop offset="55%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<header class="hero">
+  <div class="hero-ripples"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-inner">
+
+    <div class="hero-venue">
+      <span class="venue-dot"></span>arXiv &middot; 2505.05064
+    </div>
+
+    <div class="hero-title">
+      <svg class="hero-logo" viewBox="0 0 64 80" aria-label="WaterDrum logo: a water droplet striking a drum">
+        <!-- ground shadow -->
+        <ellipse class="drum-shadow" cx="32" cy="74" rx="22" ry="3.2"/>
+
+        <!-- drum body (cylinder) -->
+        <path class="drum-body" d="M10 38 L10 64 A22 6 0 0 0 54 64 L54 38 Z"/>
+        <!-- side tension rope bands -->
+        <path class="drum-rim" d="M10 46 A22 6 0 0 0 54 46"/>
+        <path class="drum-rim" d="M10 56 A22 6 0 0 0 54 56"/>
+        <!-- tuning lugs around the rim -->
+        <circle class="drum-lug" cx="13" cy="40.5" r="1.3"/>
+        <circle class="drum-lug" cx="22" cy="42.5" r="1.3"/>
+        <circle class="drum-lug" cx="32" cy="43"   r="1.3"/>
+        <circle class="drum-lug" cx="42" cy="42.5" r="1.3"/>
+        <circle class="drum-lug" cx="51" cy="40.5" r="1.3"/>
+
+        <!-- drum head (top ellipse) -->
+        <ellipse class="drum-head" cx="32" cy="38" rx="22" ry="6.2"/>
+        <!-- expanding ripple from the strike point -->
+        <ellipse class="drum-ripple logo-ripple" cx="32" cy="36" rx="14" ry="3.8" stroke-width="1"/>
+        <ellipse class="drum-ripple" cx="32" cy="36" rx="9"  ry="2.4" stroke-width="1" opacity=".7"/>
+        <ellipse class="drum-ripple" cx="32" cy="36" rx="5"  ry="1.4" stroke-width="1" opacity=".85"/>
+
+        <!-- hovering water droplet that "strikes" the drum head -->
+        <g class="logo-drop">
+          <path class="droplet-fill" d="M32 2 C32 2 22 16 22 24 C22 30 26.5 33 32 33 C37.5 33 42 30 42 24 C42 16 32 2 32 2 Z"/>
+          <path class="droplet-stroke" d="M32 2 C32 2 22 16 22 24 C22 30 26.5 33 32 33 C37.5 33 42 30 42 24 C42 16 32 2 32 2 Z"/>
+          <path class="droplet-shine" d="M28 14 C26 18 26 24 28 27 C26 24 26 18 28 14 Z"/>
+        </g>
+      </svg>
+      <h1><em>WaterDrum:</em> Watermarking for<br>Data-centric Unlearning</h1>
+    </div>
+
+    <p class="hero-tagline">Existing utility-centric unlearning metrics break down precisely where they matter most — when the forget and retain sets look alike, when retraining from scratch is impractical, and when the model owner can game the metric. WaterDrum moves the evidence of unlearning <em>into the data itself</em>, by stamping each owner's content with a robust text watermark that the unlearned model either still emits, or no longer can.</p>
+
+    <div class="hero-authors">
+      <div>
+        <span class="name">Xinyang Lu</span><sup>1<span class="eq">*</span></sup>&ensp;
+        <span class="name">Xinyuan Niu</span><sup>1,2<span class="eq">*</span></sup>&ensp;
+        <span class="name">Gregory Kang Ruey Lau</span><sup>1,3<span class="eq">*</span></sup>&ensp;
+        <span class="name">Bui Thi Cam Nhung</span><sup>1</sup>&ensp;
+        <span class="name">Rachael Hwee Ling Sim</span><sup>1</sup>
+      </div>
+      <div>
+        <span class="name">John Russell Himawan</span><sup>1</sup>&ensp;
+        <span class="name">Fanyu Wen</span><sup>1</sup>&ensp;
+        <span class="name">Chuan-Sheng Foo</span><sup>2</sup>&ensp;
+        <span class="name">See-Kiong Ng</span><sup>1</sup>&ensp;
+        <span class="name">Bryan Kian Hsiang Low</span><sup>1</sup>
+      </div>
+      <div class="affils">
+        <sup>1</sup>Department of Computer Science, National University of Singapore<br>
+        <sup>2</sup>Centre for Frontier AI Research (CFAR), A*STAR, Singapore<br>
+        <sup>3</sup>CNRS@CREATE, Singapore<br>
+        <span style="color:var(--b);opacity:.55;font-weight:400">(</span><span style="color:var(--b);font-weight:700">*</span><span style="color:var(--b);opacity:.55;font-weight:400">Equal contribution)</span>
+      </div>
+    </div>
+
+    <div class="hero-btns">
+      <a class="btn btn-arxiv" href="https://arxiv.org/abs/2505.05064" target="_blank" rel="noopener">
+        <svg width="11" height="15" viewBox="0 0 74.492 100.25" fill="currentColor"><g transform="translate(-526.086 -245.559)"><path d="M586.72,255.616a3.377,3.377,0,0,1,.448.031,5.917,5.917,0,0,1,3.581,2.79c.454,1.116.314,2.023-1.315,4.141L563.168,293.6l-8.558-10.047,29.348-26.616a4.406,4.406,0,0,1,2.762-1.321m0-1.5a5.766,5.766,0,0,0-3.69,1.643l-.041.032-.038.035L553.6,282.442l-1.077.977.943,1.107,8.558,10.047,1.145,1.344,1.141-1.348,26.267-31.022.022-.027.022-.028c1.574-2.046,2.327-3.622,1.516-5.619a7.309,7.309,0,0,0-4.779-3.714,5.083,5.083,0,0,0-.64-.043Z"/><path d="M553.423,284.593l8.977,10.558L597.911,337.9c.873,1.093,1.419,2.186,1.047,3.418a4.092,4.092,0,0,1-2.721,2.837,3.557,3.557,0,0,1-1.045.159,4,4,0,0,1-2.687-1.124L548.01,300.808c-3.5-3.5-2.971-8.151.436-11.558l4.977-4.657m.124-2.17L552.4,283.5l-4.976,4.656c-4.192,4.191-4.372,9.816-.473,13.714l44.521,42.4a5.485,5.485,0,0,0,3.722,1.538,5.1,5.1,0,0,0,1.483-.224,5.59,5.59,0,0,0,3.719-3.838,5.176,5.176,0,0,0-1.31-4.788l-35.53-42.767-8.988-10.571-1.019-1.2Z"/><path d="M562.4,295.151l9.556,11.5,5.761-5.356a7.926,7.926,0,0,0,.041-11.743l-43.7-41.923s-1.671-2.029-3.437-2.071a4.49,4.49,0,0,0-4.23,2.718c-.688,1.651-.194,2.809,1.315,4.97l29.306,35.565Z"/><path d="M553.7,306.223l-17.116,21.024c-1.255,1.337-2.032,3.683-1.331,5.367a4.587,4.587,0,0,0,4.287,2.841,4.087,4.087,0,0,0,3.082-1.523l20.328-18.9Z"/></g></svg>
+        arXiv Paper
+      </a>
+      <a class="btn btn-github" href="https://github.com/realXinyangLu/WaterDrum" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub
+      </a>
+      <a class="btn btn-hf" href="https://huggingface.co/datasets/Glow-AI/WaterDrum-TOFU" target="_blank" rel="noopener">
+        <span style="font-size:14px;line-height:1">🤗</span>
+        TOFU
+      </a>
+      <a class="btn btn-hf" href="https://huggingface.co/datasets/Glow-AI/WaterDrum-Ax" target="_blank" rel="noopener">
+        <span style="font-size:14px;line-height:1">🤗</span>
+        Ax
+      </a>
+    </div>
+
+  </div>
+
+  <div class="hero-scroll">
+    <div class="scroll-line"></div>
+    <div class="scroll-text">Scroll</div>
+  </div>
+</header>
+
+<div class="tldr-wrap">
+  <div class="tldr-inner">
+    <span class="tldr-badge" title="Too Long; Didn't Read">TL;DR</span>
+    <p class="tldr-text">WaterDrum is the <strong>first data-centric unlearning metric</strong> for LLMs. Each data owner's training text is stamped with a robust <strong>Waterfall</strong> watermark before fine-tuning; after unlearning, we verify whether the watermark still survives in the model's outputs for that owner's prompts. The result is a metric that is <strong>separable</strong> across forget/retain sets, <strong>linearly calibrated</strong> to how much was unlearned, <strong>feasible without a retrained reference model</strong>, and — uniquely — <strong>robust to exact and semantic duplicates</strong>, where every utility-centric baseline collapses to chance.</p>
+  </div>
+</div>
+
+<div class="page">
+
+  <aside class="toc" id="toc">
+    <div class="toc-label">On this page</div>
+    <a href="#problem">The Problem</a>
+    <a href="#desiderata">Four Desiderata</a>
+    <a href="#method">Method</a>
+    <a href="#pipeline" class="sub">Pipeline</a>
+    <a href="#metric" class="sub">The Metric</a>
+    <a href="#datasets">Benchmarks</a>
+    <a href="#results">Results</a>
+    <a href="#separability" class="sub">Separability</a>
+    <a href="#calibration" class="sub">Calibration</a>
+    <a href="#robustness" class="sub">Duplicates</a>
+    <a href="#takeaway">Key Takeaway</a>
+    <a href="#limitations">Limitations</a>
+    <a href="#citation">Citation</a>
+  </aside>
+
+  <article class="article">
+
+    <section id="problem" class="reveal">
+      <div class="kicker">The Problem</div>
+      <h2>The Quiet Failure of Utility-Centric Metrics</h2>
+
+      <p>Machine unlearning has become a frontline requirement for deploying large language models: regulators, content owners, and individual users increasingly need the influence of specific training data <em>removed</em> from a deployed model. The question is no longer just whether we <em>can</em> unlearn, but whether we can credibly <em>measure</em> that we have.</p>
+
+      <p>For years, that measurement has been <strong>utility-centric</strong> — we compare the unlearned model to a hypothetical "retrained-from-scratch" oracle on metrics like ROUGE, Truth Ratio, KnowMem, or membership-inference scores. This works in toy settings. In realistic ones, it breaks in three quiet ways:</p>
+
+      <div class="stage-flow reveal">
+        <div class="stage">
+          <div class="snum s1">a</div>
+          <div>
+            <div class="stitle">Semantically similar forget &amp; retain sets</div>
+            <div class="sdesc">Two news outlets paraphrase the same press release; a textbook restates a Wikipedia paragraph. A metric that scores output quality cannot separate "removed this owner's text" from "still knows the same facts from another owner." Under exact duplicates, baselines such as ROUGE and Truth Ratio collapse to chance-level AUROC (~0.5) — they literally cannot tell forget from retain.</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="snum s2">b</div>
+          <div>
+            <div class="stitle">No retrained reference model</div>
+            <div class="sdesc">"Just retrain without the forget set" is the standard sanity check, and it is computationally absurd at frontier scale. Without that oracle, utility-centric metrics have no anchor — they produce a number, but no notion of where "perfectly unlearned" should land.</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="snum s3">c</div>
+          <div>
+            <div class="stitle">Model owners can game the metric</div>
+            <div class="sdesc">If the metric is a public output statistic on a small probe set, a model owner can satisfy it without performing any unlearning at all — by post-hoc filtering, refusal training, or output rewriting. The metric measures behavior, not influence.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout">
+        Each of these failures shares the same root cause: utility-centric metrics ask the <em>model</em> what it knows. WaterDrum asks the <strong>data</strong> whether it is still being used.
+      </div>
+    </section>
+
+    <hr>
+
+    <section id="desiderata" class="reveal">
+      <div class="kicker">What an Unlearning Metric Should Do</div>
+      <h2>Four Desiderata, One Yardstick</h2>
+
+      <p>Before proposing WaterDrum, the paper crystallises what we actually want from an unlearning metric. The four desiderata are not aspirational — they are the diagnostic test that every metric in the literature is then graded against.</p>
+
+      <div class="stage-flow reveal">
+        <div class="stage">
+          <div class="snum s1">D1</div>
+          <div>
+            <div class="stitle">Separability</div>
+            <div class="sdesc">The metric must distinguish whether a given owner's data still influences the model. Concretely, retain-set queries should produce higher metric values than forget-set queries — operationalised as <strong>AUROC ≈ 1</strong> between the two distributions.</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="snum s2">D2</div>
+          <div>
+            <div class="stitle">Calibration</div>
+            <div class="sdesc">The aggregate metric should scale <em>proportionally</em> with the fraction of forget data still effectively present. This turns unlearning from a binary verdict into a continuous, auditable measurement — and lets us detect <em>partial</em> unlearning.</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="snum s3">D3</div>
+          <div>
+            <div class="stitle">Feasibility</div>
+            <div class="sdesc">No retrained-from-scratch reference model. Query-only access to the LLM — no weights, no logits, no internal probes. The metric should be computable in the regime where real deployments actually live.</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="snum s4">D4</div>
+          <div>
+            <div class="stitle">Robustness to Similar Data</div>
+            <div class="sdesc">D1 and D2 should continue to hold when the forget and retain sets contain semantically similar or even exactly duplicated content. This is where every utility-centric metric we tested fails — and where data-centric watermarking quietly thrives.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-v">
+        Read across the four: <strong>D1</strong> is the binary test, <strong>D2</strong> is the continuous test, <strong>D3</strong> is the deployability test, <strong>D4</strong> is the realism test. A metric that passes three but fails one is not enough.
+      </div>
+    </section>
+
+    <hr>
+
+    <section id="method" class="reveal">
+      <div class="kicker">Method</div>
+      <h2>Watermark the Data, Not the Model</h2>
+
+      <p>The architectural shift is small to state and large in consequence. Instead of measuring what the model produces on a probe set, we modify <em>the training data itself</em> before fine-tuning, so that each data owner's content carries a hidden, owner-specific signature. After unlearning, we ask a simple question of the model's outputs: <em>is owner i's signature still there?</em></p>
+
+      <h3 id="pipeline">A Three-Stage Pipeline</h3>
+
+      <div class="stage-flow reveal">
+        <div class="stage">
+          <div class="snum s1">1</div>
+          <div>
+            <div class="stitle">Watermark each owner's text (Waterfall)</div>
+            <div class="sdesc">Each data owner <em>i</em> applies the <strong>Waterfall</strong> text watermarking framework with a private key <em>μᵢ</em>. Waterfall paraphrases the owner's documents while statistically biasing token choices in a key-dependent way: a verifier with the same key can later detect the watermark's presence in any text derived from those documents, including LLM outputs that simply <em>learned from</em> them.</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="snum s2">2</div>
+          <div>
+            <div class="stitle">Fine-tune on the watermarked corpus</div>
+            <div class="sdesc">The LLM is fine-tuned as usual on the watermarked dataset. Because each owner contributes only watermarked text, the model implicitly learns each owner's statistical signature — but no document IDs, prompts, or special tokens are exposed. The watermark is invisible to downstream users and to the model itself.</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="snum s3">3</div>
+          <div>
+            <div class="stitle">Verify after unlearning</div>
+            <div class="sdesc">For each owner <em>i</em>, sample model continuations <em>φ(q<sub>d</sub>)</em> from prompts drawn from that owner's domain. Apply the Waterfall verifier <em>𝒱(·, μᵢ)</em>: a watermark-strength score that is high when owner <em>i</em>'s influence persists, and near zero when it has been unlearned. <strong>No retrained reference. No model internals.</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <h3 id="metric">The Metric in One Line</h3>
+
+      <p>For an LLM <em>φ</em>, a prompt distribution over owner <em>i</em>'s domain, and that owner's watermark key <em>μᵢ</em>, the per-query WaterDrum metric is simply:</p>
+
+      <div class="codeblock">
+        <div class="cb-head">
+          <span class="cb-lang">Metric</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--t4)">Definition&nbsp;1</span>
+        </div>
+        <pre>  <span class="bt-field">M'</span>(<span class="bt-key">φ</span>(<span class="bt-val">q_d</span>), <span class="bt-key">i</span>) <span class="bt-brace">:=</span> <span class="bt-type">𝒱</span>(<span class="bt-key">φ</span>(<span class="bt-val">q_d</span>), <span class="bt-key">μ_i</span>)
+
+  <span style="color:#7c97b6">// 𝒱 is the Waterfall verifier;</span>
+  <span style="color:#7c97b6">// μ_i is owner i's private watermark key;</span>
+  <span style="color:#7c97b6">// q_d is a prompt drawn from owner i's domain;</span>
+  <span style="color:#7c97b6">// φ(q_d) is the LLM's continuation.</span></pre>
+      </div>
+
+      <p>Aggregating <em>M′</em> across many prompts gives a per-owner watermark strength. Comparing forget-set owners against retain-set owners yields the <strong>AUROC</strong> for D1; comparing aggregate strength against the fraction of remaining forget data yields the <strong>calibration curve</strong> for D2.</p>
+
+      <div class="callout">
+        The signal is in the data, not in the metric's framing. Even if a model owner rewrites outputs, refuses queries, or filters generations, the watermark either still survives in <em>some</em> continuations or it doesn't — and the verifier can tell.
+      </div>
+    </section>
+
+    <hr>
+
+    <section id="datasets" class="reveal">
+      <div class="kicker">Benchmarks</div>
+      <h2>Two Datasets, One Hard Test</h2>
+
+      <p>We release two watermarked corpora that are now the public reference for data-centric unlearning evaluation, each with calibration splits and explicit duplicate/semantic-duplicate variants for D2 and D4.</p>
+
+      <div class="dscards reveal">
+        <div class="dscard">
+          <span class="ds-tag a">QA · Authors</span>
+          <div class="ds-title">WaterDrum-TOFU</div>
+          <div class="ds-meta">Glow-AI/WaterDrum-TOFU · question-answering</div>
+          <p class="ds-desc">The TOFU "fictitious authors" benchmark, re-released with each author's QA pairs watermarked under a per-author Waterfall key. Includes forget-1%, forget-5%, and forget-10% splits, unwatermarked twins for ablation, and exact / semantic duplicate variants for D4.</p>
+          <a class="ds-link" href="https://huggingface.co/datasets/Glow-AI/WaterDrum-TOFU" target="_blank" rel="noopener">Open on Hugging Face →</a>
+        </div>
+        <div class="dscard">
+          <span class="ds-tag b">Long-form · arXiv</span>
+          <div class="ds-title">WaterDrum-Ax</div>
+          <div class="ds-meta">Glow-AI/WaterDrum-Ax · arXiv abstracts</div>
+          <p class="ds-desc">arXiv paper abstracts grouped by topical class, with each class watermarked as a separate "data owner." Designed for class-level unlearning, with calibration percentages, exact duplicates, and semantically paraphrased duplicates to stress-test D4.</p>
+          <a class="ds-link" href="https://huggingface.co/datasets/Glow-AI/WaterDrum-Ax" target="_blank" rel="noopener">Open on Hugging Face →</a>
+        </div>
+      </div>
+
+      <p>Both datasets ship with unwatermarked twins, so a single config switch toggles between the watermarked and unwatermarked regimes — making it trivial to ablate the watermark itself, or to use the corpora as a plain unlearning benchmark for utility-centric metrics.</p>
+    </section>
+
+    <hr>
+
+    <section id="results" class="reveal">
+      <div class="kicker">Results</div>
+      <h2>What Survives the Duplicate Stress Test</h2>
+
+      <p>We grade every metric — ROUGE, Truth Ratio, KnowMem, MIA, and WaterDrum — against the four desiderata across three data regimes: <strong>No Duplicate</strong> (the easy case the literature has lived in), <strong>Semantic Duplicate</strong> (paraphrased overlap with similarity ≈ 0.94), and <strong>Exact Duplicate</strong> (copies of forget content also appearing in the retain set).</p>
+
+      <div class="stats reveal">
+        <div class="stat" style="background:linear-gradient(135deg,rgba(56,189,248,.18),rgba(56,189,248,.07));border-color:rgba(56,189,248,.35)">
+          <div class="stat-num ca" data-target="0.926">0</div>
+          <div class="stat-desc">AUROC on TOFU under <em>exact duplicates</em> — ROUGE and Truth Ratio collapse to ≈ 0.51</div>
+        </div>
+        <div class="stat" style="background:linear-gradient(135deg,rgba(34,211,238,.18),rgba(34,211,238,.07));border-color:rgba(34,211,238,.35)">
+          <div class="stat-num cb" data-target="0.957">0</div>
+          <div class="stat-desc">AUROC on Ax under <em>exact duplicates</em>, where every baseline drops below 0.50</div>
+        </div>
+        <div class="stat" style="background:linear-gradient(135deg,rgba(45,212,191,.18),rgba(45,212,191,.07));border-color:rgba(45,212,191,.35)">
+          <div class="stat-num cg" data-target="0.987">0</div>
+          <div class="stat-desc">Calibration R² under exact duplicates — the only metric with R² &gt; 0 across all regimes</div>
+        </div>
+      </div>
+
+      <h3 id="separability">Separability (D1) · AUROC</h3>
+      <p>WaterDrum maintains <strong>AUROC ≥ 0.92</strong> across every dataset and every duplicate regime. Utility-centric baselines are competitive on the no-duplicate case and then crater under realistic similar-data conditions.</p>
+
+      <div class="table-wrap">
+      <table class="rtable reveal">
+        <thead>
+          <tr>
+            <th rowspan="2" style="vertical-align:bottom">Setting</th>
+            <th colspan="3" class="ctr">WaterDrum-TOFU (AUROC)</th>
+            <th colspan="3" class="ctr">WaterDrum-Ax (AUROC)</th>
+          </tr>
+          <tr>
+            <th class="ctr">ROUGE</th><th class="ctr">Truth Ratio</th><th class="ctr">WaterDrum</th>
+            <th class="ctr">ROUGE</th><th class="ctr">KnowMem</th><th class="ctr">WaterDrum</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>No Duplicate</td>
+            <td class="ctr">0.908</td><td class="ctr">0.747</td><td class="ctr best">0.928</td>
+            <td class="ctr">0.974</td><td class="ctr">0.491</td><td class="ctr best">0.965</td>
+          </tr>
+          <tr>
+            <td>Semantic Duplicate</td>
+            <td class="ctr">0.798</td><td class="ctr weak">0.472</td><td class="ctr best">0.954</td>
+            <td class="ctr">0.960</td><td class="ctr weak">0.450</td><td class="ctr best">0.963</td>
+          </tr>
+          <tr class="mr">
+            <td><strong>Exact Duplicate</strong></td>
+            <td class="ctr weak">0.510</td><td class="ctr weak">0.508</td><td class="ctr best">0.926</td>
+            <td class="ctr weak">0.334</td><td class="ctr weak">0.492</td><td class="ctr best">0.957</td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="fn">Bold = WaterDrum's AUROC. Red = collapse to chance (≈ 0.50) or worse. Numbers are means across five seeds; full standard deviations and additional baselines (MIA, KnowMem on TOFU) are reported in the paper.</p>
+
+      <h3 id="calibration">Calibration (D2) · R²</h3>
+      <p>Calibration asks whether the metric scales linearly with how much forget data remains. The slope, intercept, and noise are summarised by R². <strong>Only WaterDrum keeps R² ≈ 1</strong> across all three regimes; the others swing wildly negative, meaning their "calibration curves" are flat or non-monotonic — useless for partial-unlearning audits.</p>
+
+      <div class="table-wrap">
+      <table class="rtable reveal">
+        <thead>
+          <tr>
+            <th>Setting</th>
+            <th class="ctr">ROUGE</th>
+            <th class="ctr">KnowMem</th>
+            <th class="ctr">MIA</th>
+            <th class="ctr">WaterDrum</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>No Duplicate</td>
+            <td class="ctr">0.650</td><td class="ctr weak">−252.9</td><td class="ctr">0.677</td><td class="ctr best">0.963</td>
+          </tr>
+          <tr>
+            <td>Semantic Duplicate</td>
+            <td class="ctr">0.693</td><td class="ctr weak">−276.5</td><td class="ctr weak">−14.52</td><td class="ctr best">0.991</td>
+          </tr>
+          <tr class="mr">
+            <td><strong>Exact Duplicate</strong></td>
+            <td class="ctr weak">−37.47</td><td class="ctr weak">−498.1</td><td class="ctr weak">−285.6</td><td class="ctr best">0.987</td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="fn">Higher R² is better; 1.0 is perfect linear calibration. Large negative R² means the regression is worse than predicting the mean — i.e. the metric is essentially flat with respect to forget-set size.</p>
+
+      <h3 id="robustness">Robustness to Duplicates (D4)</h3>
+      <p>Restating the headline as a side-by-side: when we move from the easy no-duplicate regime to the realistic exact-duplicate one, what is the absolute change in each metric's AUROC?</p>
+
+      <div class="noise-grid reveal">
+        <div class="noise-card" style="background:var(--bg2)">
+          <div class="nc-title">ROUGE (TOFU)</div>
+          <div class="nc-row"><span class="nc-name">No-dup → Sem-dup</span><span class="dbad">−0.110</span></div>
+          <div class="nc-row"><span class="nc-name">No-dup → Exact-dup</span><span class="dbad">−0.398</span></div>
+        </div>
+        <div class="noise-card" style="background:var(--bg2)">
+          <div class="nc-title">Truth Ratio (TOFU)</div>
+          <div class="nc-row"><span class="nc-name">No-dup → Sem-dup</span><span class="dbad">−0.275</span></div>
+          <div class="nc-row"><span class="nc-name">No-dup → Exact-dup</span><span class="dbad">−0.239</span></div>
+        </div>
+        <div class="noise-card" style="background:var(--a-dim);border-color:rgba(56,189,248,.30)">
+          <div class="nc-title" style="color:var(--a)">WaterDrum (TOFU)</div>
+          <div class="nc-row"><span class="nc-name">No-dup → Sem-dup</span><span class="dgood">+0.026</span></div>
+          <div class="nc-row"><span class="nc-name">No-dup → Exact-dup</span><span class="dgood">−0.002</span></div>
+        </div>
+      </div>
+
+      <p>The asymmetry is structural, not anecdotal. ROUGE asks "does the model still produce text that looks like the forget set?" — and under exact duplicates, every retain-set query also looks like the forget set. WaterDrum asks "does the model still produce text that carries owner <em>i</em>'s watermark key <em>μᵢ</em>?" — and that question has the same answer regardless of how the surface text overlaps. The watermark survives paraphrase by design.</p>
+
+      <p>Across unlearning algorithms (gradient ascent, NPO, DPO-based unlearning, and full retraining), WaterDrum tracks the <em>actual</em> influence of the forget set rather than its <em>linguistic shadow</em> — and is the only metric whose ordering of algorithms agrees with the retrained-from-scratch oracle across all duplicate regimes.</p>
+    </section>
+
+    <hr>
+
+    <section id="takeaway" class="reveal">
+      <div class="kicker">Key Insight</div>
+      <h2>One Thing to Remember</h2>
+
+      <div class="takeaway reveal">
+        <div class="takeaway-icon">💧</div>
+        <div class="takeaway-text">
+          Utility-centric metrics ask <em>the model</em> what it still produces.
+          WaterDrum <strong>stamps the data</strong> with a per-owner watermark, so the metric becomes a question about the data itself —
+          <strong>separable, calibrated, and feasible</strong> even when forget and retain sets are word-for-word identical.
+        </div>
+      </div>
+
+      <p>For practitioners deploying unlearning in regulated environments, the practical handle is small and concrete: watermark the corpus once with Waterfall before fine-tuning, keep each owner's key privately, and run the verifier on a fixed prompt set after any unlearning operation. The metric is reproducible, monotone in the amount of unlearning, and resistant to the kinds of corner-cases that have historically made unlearning audits a soft science.</p>
+
+      <p>For researchers, the bigger handle is the framing: <em>treat the data as the unit of measurement, not the model.</em> The four desiderata, the two benchmarks, and the public verifier are now the floor for evaluating any future unlearning algorithm.</p>
+    </section>
+
+    <hr>
+
+    <section id="limitations" class="reveal">
+      <div class="kicker">Limitations &amp; Future Work</div>
+      <h2>Where WaterDrum Doesn't Reach (Yet)</h2>
+
+      <p>WaterDrum's strength is exactly its scope. The metric is designed to evaluate unlearning under fine-tuning regimes where the data owner controls how their content is ingested. Four honest caveats follow from that:</p>
+
+      <div class="lim-grid reveal">
+        <div class="lim-card">
+          <div class="lim-title"><div class="lim-dot"></div>Pre-Watermarked Training Data</div>
+          <p>Owners must apply Waterfall <em>before</em> their content enters the training corpus. For unlearning on already-pretrained models with unwatermarked data, WaterDrum cannot retroactively recover a signature; a hybrid with watermark-free baselines is needed.</p>
+        </div>
+        <div class="lim-card">
+          <div class="lim-title"><div class="lim-dot lim-dot-b"></div>Watermark Adversaries</div>
+          <p>A determined adversary that aggressively paraphrases or denoises model outputs may degrade the watermark verifier's signal. Waterfall is robust to standard paraphrase, but adaptive removal attacks remain an open frontier.</p>
+        </div>
+        <div class="lim-card">
+          <div class="lim-title"><div class="lim-dot lim-dot-c"></div>Per-Owner Key Management</div>
+          <p>Each owner needs a private key <em>μᵢ</em> at watermarking time and at verification time. Key custody, rotation, and revocation are real operational concerns the paper acknowledges but does not solve.</p>
+        </div>
+        <div class="lim-card">
+          <div class="lim-title"><div class="lim-dot lim-dot-d"></div>Modality &amp; Domain Scope</div>
+          <p>Evaluation is on QA (TOFU) and long-form text (arXiv abstracts) in English. Code, structured data, multilingual corpora, and multimodal settings are not yet covered, and the watermarking primitive will need domain-specific extensions.</p>
+        </div>
+      </div>
+
+      <p>Future directions: tighter integration with continual-unlearning algorithms, watermarking schemes whose verifier strength depends on the <em>quantity</em> of an owner's data rather than just its presence, and adversarial robustness benchmarks for paraphrase-based watermark removal.</p>
+    </section>
+
+    <hr>
+
+    <section id="citation" class="reveal">
+      <div class="kicker">Citation</div>
+      <h2>Cite this Work</h2>
+
+      <div class="codeblock">
+        <div class="cb-head">
+          <span class="cb-lang">BibTeX</span>
+          <button class="cb-copy" onclick="copyBib(this)">Copy</button>
+        </div>
+        <pre><span class="bt-type">@article</span><span class="bt-brace">{</span><span class="bt-key">lu2025waterdrum</span><span class="bt-brace">,</span>
+  <span class="bt-field">title</span>   <span class="bt-brace">= {</span><span class="bt-val">WaterDrum: Watermarking for Data-centric Unlearning Metric</span><span class="bt-brace">},</span>
+  <span class="bt-field">author</span>  <span class="bt-brace">= {</span><span class="bt-val">Lu, Xinyang and Niu, Xinyuan and Lau, Gregory Kang Ruey and
+           Nhung, Bui Thi Cam and Sim, Rachael Hwee Ling and
+           Himawan, John Russell and Wen, Fanyu and Foo, Chuan-Sheng and
+           Ng, See-Kiong and Low, Bryan Kian Hsiang</span><span class="bt-brace">},</span>
+  <span class="bt-field">journal</span> <span class="bt-brace">= {</span><span class="bt-val">arXiv preprint arXiv:2505.05064</span><span class="bt-brace">},</span>
+  <span class="bt-field">year</span>    <span class="bt-brace">= {</span><span class="bt-val">2025</span><span class="bt-brace">}
+}</span></pre>
+      </div>
+    </section>
+
+  </article>
+</div>
+
+<footer>
+  <div class="footer-logo">
+    <svg width="42" height="42" viewBox="0 0 64 80" aria-hidden="true">
+      <ellipse class="drum-shadow" cx="32" cy="74" rx="22" ry="3"/>
+      <path class="drum-body" d="M10 38 L10 64 A22 6 0 0 0 54 64 L54 38 Z"/>
+      <path class="drum-rim" d="M10 46 A22 6 0 0 0 54 46"/>
+      <path class="drum-rim" d="M10 56 A22 6 0 0 0 54 56"/>
+      <ellipse class="drum-head" cx="32" cy="38" rx="22" ry="6.2"/>
+      <ellipse class="drum-ripple" cx="32" cy="36" rx="9"  ry="2.4" stroke-width="1" opacity=".7"/>
+      <ellipse class="drum-ripple" cx="32" cy="36" rx="5"  ry="1.4" stroke-width="1" opacity=".85"/>
+      <path class="droplet-fill"   d="M32 2 C32 2 22 16 22 24 C22 30 26.5 33 32 33 C37.5 33 42 30 42 24 C42 16 32 2 32 2 Z"/>
+      <path class="droplet-stroke" d="M32 2 C32 2 22 16 22 24 C22 30 26.5 33 32 33 C37.5 33 42 30 42 24 C42 16 32 2 32 2 Z"/>
+    </svg>
+    <em>WaterDrum:</em> Watermarking for Data-centric Unlearning
+  </div>
+  <div class="footer-sub">A data-centric unlearning metric for large language models.</div>
+  <div class="footer-links">
+    <a class="btn btn-arxiv" href="https://arxiv.org/abs/2505.05064" target="_blank" rel="noopener">
+      <svg width="11" height="15" viewBox="0 0 74.492 100.25" fill="currentColor"><g transform="translate(-526.086 -245.559)"><path d="M586.72,255.616a3.377,3.377,0,0,1,.448.031,5.917,5.917,0,0,1,3.581,2.79c.454,1.116.314,2.023-1.315,4.141L563.168,293.6l-8.558-10.047,29.348-26.616a4.406,4.406,0,0,1,2.762-1.321m0-1.5a5.766,5.766,0,0,0-3.69,1.643l-.041.032-.038.035L553.6,282.442l-1.077.977.943,1.107,8.558,10.047,1.145,1.344,1.141-1.348,26.267-31.022.022-.027.022-.028c1.574-2.046,2.327-3.622,1.516-5.619a7.309,7.309,0,0,0-4.779-3.714,5.083,5.083,0,0,0-.64-.043Z"/><path d="M553.423,284.593l8.977,10.558L597.911,337.9c.873,1.093,1.419,2.186,1.047,3.418a4.092,4.092,0,0,1-2.721,2.837,3.557,3.557,0,0,1-1.045.159,4,4,0,0,1-2.687-1.124L548.01,300.808c-3.5-3.5-2.971-8.151.436-11.558l4.977-4.657m.124-2.17L552.4,283.5l-4.976,4.656c-4.192,4.191-4.372,9.816-.473,13.714l44.521,42.4a5.485,5.485,0,0,0,3.722,1.538,5.1,5.1,0,0,0,1.483-.224,5.59,5.59,0,0,0,3.719-3.838,5.176,5.176,0,0,0-1.31-4.788l-35.53-42.767-8.988-10.571-1.019-1.2Z"/><path d="M562.4,295.151l9.556,11.5,5.761-5.356a7.926,7.926,0,0,0,.041-11.743l-43.7-41.923s-1.671-2.029-3.437-2.071a4.49,4.49,0,0,0-4.23,2.718c-.688,1.651-.194,2.809,1.315,4.97l29.306,35.565Z"/><path d="M553.7,306.223l-17.116,21.024c-1.255,1.337-2.032,3.683-1.331,5.367a4.587,4.587,0,0,0,4.287,2.841,4.087,4.087,0,0,0,3.082-1.523l20.328-18.9Z"/></g></svg>
+      arXiv Paper
+    </a>
+    <a class="btn btn-github" href="https://github.com/realXinyangLu/WaterDrum" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      GitHub
+    </a>
+    <a class="btn btn-hf" href="https://huggingface.co/datasets/Glow-AI/WaterDrum-TOFU" target="_blank" rel="noopener">
+      <span style="font-size:14px;line-height:1">🤗</span>
+      TOFU
+    </a>
+    <a class="btn btn-hf" href="https://huggingface.co/datasets/Glow-AI/WaterDrum-Ax" target="_blank" rel="noopener">
+      <span style="font-size:14px;line-height:1">🤗</span>
+      Ax
+    </a>
+    <a class="btn btn-ghost" href="#problem">↑ Back to top</a>
+  </div>
+  <div class="footer-credit">
+    &copy; 2025 WaterDrum Team &nbsp;·&nbsp; National University of Singapore &nbsp;·&nbsp; A*STAR CFAR &nbsp;·&nbsp; CNRS@CREATE
+  </div>
+</footer>
+
+<script>
+/* Reveal on scroll */
+const ro = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('on'); ro.unobserve(e.target) } })
+}, { threshold: 0.06, rootMargin: '0px 0px -48px 0px' })
+document.querySelectorAll('.reveal').forEach(el => ro.observe(el))
+
+/* TOC */
+const toc = document.getElementById('toc')
+setTimeout(() => toc && toc.classList.add('ready'), 400)
+const tocLinks = document.querySelectorAll('.toc a')
+const tocObs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      tocLinks.forEach(l => l.classList.remove('active'))
+      const a = document.querySelector(`.toc a[href="#${e.target.id}"]`)
+      if (a) a.classList.add('active')
+    }
+  })
+}, { rootMargin: '-15% 0px -70% 0px' })
+document.querySelectorAll('section[id], h3[id]').forEach(s => tocObs.observe(s))
+
+/* Count-up (supports decimals) */
+const co = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (!e.isIntersecting) return
+    const el = e.target
+    const target = parseFloat(el.dataset.target)
+    const decimals = (el.dataset.target.split('.')[1] || '').length
+    let start = null
+    const run = ts => {
+      if (!start) start = ts
+      const p = Math.min((ts - start) / 1400, 1)
+      const v = (1 - Math.pow(1 - p, 3)) * target
+      el.textContent = v.toFixed(decimals) + (el.dataset.unit || '')
+      if (p < 1) requestAnimationFrame(run)
+    }
+    requestAnimationFrame(run)
+    co.unobserve(el)
+  })
+}, { threshold: 0.5 })
+document.querySelectorAll('[data-target]').forEach(el => {
+  const decimals = (el.dataset.target.split('.')[1] || '').length
+  el.textContent = (0).toFixed(decimals)
+  co.observe(el)
+})
+
+/* Copy BibTeX */
+function copyBib(btn) {
+  navigator.clipboard.writeText(btn.closest('.codeblock').querySelector('pre').innerText).then(() => {
+    btn.textContent = 'Copied!'
+    setTimeout(() => btn.textContent = 'Copy', 2200)
+  })
+}
+
+/* Above-fold reveal */
+window.addEventListener('load', () => {
+  document.querySelectorAll('.reveal').forEach(el => {
+    if (el.getBoundingClientRect().top < window.innerHeight) el.classList.add('on')
+  })
+})
+
+/* Reading progress */
+const rp = document.getElementById('rp')
+window.addEventListener('scroll', () => {
+  const total = document.documentElement.scrollHeight - window.innerHeight
+  rp.style.width = (total > 0 ? Math.min(window.scrollY / total * 100, 100) : 0) + '%'
+}, { passive: true })
+
+/* Theme toggle */
+function toggleTheme() {
+  const html = document.documentElement
+  const isDark = html.getAttribute('data-theme') !== 'light'
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark')
+  localStorage.setItem('theme', isDark ? 'light' : 'dark')
+}
+;(function() {
+  const saved = localStorage.getItem('theme')
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved)
+  } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.documentElement.setAttribute('data-theme', 'dark')
+  }
+})()
+</script>
+</body>
+</html>
